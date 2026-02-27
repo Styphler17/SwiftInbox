@@ -86,6 +86,7 @@ export default function App() {
   const [customDomain, setCustomDomain] = useState('');
   const [showSupport, setShowSupport] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   const isPro = plan === 'plus' || plan === 'pro';
   const isUltimate = plan === 'pro';
@@ -97,6 +98,19 @@ export default function App() {
   const countdownInterval = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session_id');
+    const newPlan = params.get('plan') as 'plus' | 'pro' | null;
+    
+    if (sessionId && newPlan) {
+      setPlan(newPlan);
+      showToast(`Successfully upgraded to ${newPlan.toUpperCase()}!`);
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
     const handleScroll = () => {
       setShowBackToTop(window.scrollY > 400);
     };
@@ -106,6 +120,32 @@ export default function App() {
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleUpgrade = async (targetPlan: 'plus' | 'pro') => {
+    try {
+      setIsCheckingOut(true);
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          plan: targetPlan,
+          appUrl: window.location.origin
+        }),
+      });
+      
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || "Failed to create checkout session");
+      }
+    } catch (error: any) {
+      console.error("Checkout Error:", error);
+      showToast(error.message || "Payment system unavailable. Try again later.");
+    } finally {
+      setIsCheckingOut(false);
+    }
   };
 
   const createInbox = useCallback((domainName: string) => {
@@ -890,12 +930,11 @@ export default function App() {
                   ))}
                 </ul>
                 <button 
-                  onClick={() => {
-                    setPlan('plus');
-                    showToast("Welcome to SwiftInbox Plus!");
-                  }}
-                  className="w-full btn-primary py-2 text-sm"
+                  onClick={() => handleUpgrade('plus')}
+                  disabled={isCheckingOut}
+                  className="w-full btn-primary py-2 text-sm flex items-center justify-center gap-2"
                 >
+                  {isCheckingOut ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
                   Upgrade to Plus
                 </button>
               </div>
@@ -922,12 +961,11 @@ export default function App() {
                   ))}
                 </ul>
                 <button 
-                  onClick={() => {
-                    setPlan('pro');
-                    showToast("Welcome to SwiftInbox Pro! All features unlocked.");
-                  }}
-                  className="w-full btn-primary py-2 text-sm shadow-xl shadow-primary/20"
+                  onClick={() => handleUpgrade('pro')}
+                  disabled={isCheckingOut}
+                  className="w-full btn-primary py-2 text-sm shadow-xl shadow-primary/20 flex items-center justify-center gap-2"
                 >
+                  {isCheckingOut ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
                   Upgrade to Pro
                 </button>
               </div>
