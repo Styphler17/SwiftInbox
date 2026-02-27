@@ -527,14 +527,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Demo Notice */}
-      <div className="bg-amber-50 border-b border-amber-100 py-2 px-4 text-center">
-        <p className="text-xs font-medium text-amber-800 flex items-center justify-center gap-2">
-          <Shield className="w-3 h-3" />
-          <span>DEMO MODE: This is a frontend prototype. It does not receive real emails yet.</span>
-        </p>
-      </div>
-
       {/* Header & Navigation */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1315,10 +1307,9 @@ export default function App() {
                   <div className="absolute -inset-10 bg-accent/10 blur-[120px] rounded-full"></div>
                   <div className="glass-card bg-white/5 border-white/10 p-4 rounded-3xl shadow-2xl backdrop-blur-3xl">
                     <img
-                      src="https://picsum.photos/seed/swift-ui/1000/800"
-                      alt="App Interface Preview"
-                      className="rounded-2xl shadow-inner brightness-90 grayscale-[0.2] hover:grayscale-0 transition-all duration-700"
-                      referrerPolicy="no-referrer"
+                      src="/how-it-works.jpg"
+                      alt="Debesties Mail - Secure and Temporary"
+                      className="rounded-2xl shadow-inner brightness-95 hover:brightness-100 transition-all duration-700"
                     />
                   </div>
                 </motion.div>
