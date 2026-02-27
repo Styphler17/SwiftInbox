@@ -1,16 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  Mail, 
-  Copy, 
-  RefreshCw, 
-  Shield, 
-  Zap, 
-  Inbox, 
-  CheckCircle2, 
-  ChevronRight, 
-  Trash2, 
-  Clock, 
-  Lock, 
+import {
+  Mail,
+  Copy,
+  RefreshCw,
+  Shield,
+  Zap,
+  Inbox,
+  CheckCircle2,
+  ChevronRight,
+  Trash2,
+  Clock,
+  Lock,
   Code,
   ExternalLink,
   Menu,
@@ -65,67 +65,118 @@ export default function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number>(600); // 10 minutes in seconds
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
-  const [simulatedEmails, setSimulatedEmails] = useState<Email[]>([]);
-  
+  const [token, setToken] = useState<string | null>(localStorage.getItem('swift_token'));
+  const [accountId, setAccountId] = useState<string | null>(localStorage.getItem('swift_accountId'));
+
   // Simulation of auto-refresh
   const refreshInterval = useRef<NodeJS.Timeout | null>(null);
   const countdownInterval = useRef<NodeJS.Timeout | null>(null);
 
-  const generateNewEmail = useCallback((isInitial = false) => {
+  const generateNewEmail = useCallback(async (isInitial = false) => {
     if (!isInitial) setInbox(prev => ({ ...prev, isLoading: true }));
-    
-    // Simulate API delay
-    const delay = isInitial ? 0 : 800;
-    
-    setTimeout(() => {
+
+    try {
+      // 1. Get Domains
+      const domainRes = await fetch('/api/domains');
+      const domains = await domainRes.json();
+      if (!domains['hydra:member'] || domains['hydra:member'].length === 0) throw new Error('No domains available');
+
+      const domain = domains['hydra:member'][0].domain;
+      const username = Math.random().toString(36).substring(2, 10);
+      const address = `${username}@${domain}`;
+      const password = Math.random().toString(36).substring(2, 12);
+
+      // 2. Create Account
+      const accountRes = await fetch('/api/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, password }),
+      });
+      const account = await accountRes.json();
+
+      // 3. Get Token
+      const tokenRes = await fetch('/api/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, password }),
+      });
+      const tokenData = await tokenRes.json();
+
       const now = new Date();
       const expiry = new Date(now.getTime() + 10 * 60 * 1000);
-      const initialEmail = { ...MOCK_EMAILS[0], timestamp: now.toISOString() };
+
+      setToken(tokenData.token);
+      setAccountId(account.id);
+      localStorage.setItem('swift_token', tokenData.token);
+      localStorage.setItem('swift_accountId', account.id);
+      localStorage.setItem('swift_address', address);
+
       setInbox({
-        address: generateRandomAddress(),
-        emails: [initialEmail],
+        address: address,
+        emails: [],
         isLoading: false,
         lastUpdated: now,
         expiresAt: expiry,
       });
-      setSimulatedEmails([initialEmail]);
       setTimeLeft(600);
-    }, delay);
+    } catch (error) {
+      console.error('Failed to generate email:', error);
+      showToast("Connection failed. Using demo mode.");
+    }
   }, []);
 
   const simulateIncomingEmail = () => {
-    const newEmail: Email = {
-      id: Math.random().toString(36).substr(2, 9),
-      from: 'noreply@service.com',
-      subject: 'Your Verification Code',
-      body: `Your code is: ${Math.floor(100000 + Math.random() * 900000)}. Use this to complete your registration.`,
-      timestamp: new Date().toISOString(),
-      read: false,
-    };
-    setSimulatedEmails(prev => [newEmail, ...prev]);
-    showToast("New simulated email received!");
+    showToast("Simulation disabled in real mode.");
   };
 
-  const refreshInbox = useCallback((showLoading = false) => {
+  const refreshInbox = useCallback(async (showLoading = false) => {
+    if (!token) return;
+
     setInbox(prev => {
       if (!prev.address) return prev;
       return { ...prev, isLoading: showLoading };
     });
 
-    // Simulate fetching new emails
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/messages', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await response.json();
+      const messages = data['hydra:member'] || [];
+
+      const mappedEmails: Email[] = messages.map((msg: any) => ({
+        id: msg.id,
+        from: msg.from.address,
+        subject: msg.subject,
+        body: msg.intro || 'No preview available',
+        timestamp: msg.createdAt,
+        read: msg.seen,
+      }));
+
       setInbox(prev => ({
         ...prev,
-        emails: simulatedEmails,
+        emails: mappedEmails,
         isLoading: false,
         lastUpdated: new Date(),
       }));
-    }, 500);
-  }, [simulatedEmails]);
+    } catch (error) {
+      console.error('Failed to refresh inbox:', error);
+    }
+  }, [token]);
 
-  // Initial generation
+  // Initial generation / Hydration
   useEffect(() => {
-    generateNewEmail(true);
+    const savedAddress = localStorage.getItem('swift_address');
+    if (token && savedAddress && accountId) {
+      setInbox(prev => ({
+        ...prev,
+        address: savedAddress,
+        isLoading: true
+      }));
+      refreshInbox(true);
+    } else {
+      generateNewEmail(true);
+    }
   }, []);
 
   // Countdown timer
@@ -180,13 +231,49 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleEmailClick = (email: Email) => {
+  const handleEmailClick = async (email: Email) => {
     setSelectedEmail(email);
+
+    // Fetch full message body if it's just a snippet
+    if (token) {
+      try {
+        const response = await fetch(`/api/messages/${email.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        const fullMsg = await response.json();
+        const updatedEmail = {
+          ...email,
+          body: fullMsg.text || fullMsg.html || email.body,
+          read: true
+        };
+        setSelectedEmail(updatedEmail);
+
+        // Update it in the inbox list as well
+        setInbox(prev => ({
+          ...prev,
+          emails: prev.emails.map(e => e.id === email.id ? updatedEmail : e)
+        }));
+      } catch (error) {
+        console.error('Failed to fetch full email body:', error);
+      }
+    }
+
     navigator.clipboard.writeText(email.body);
     showToast("Email content copied to clipboard!");
   };
 
-  const deleteEmail = (id: string) => {
+  const deleteEmail = async (id: string) => {
+    if (token) {
+      try {
+        await fetch(`/api/messages/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+      } catch (error) {
+        console.error('Failed to delete email from server:', error);
+      }
+    }
+
     setInbox(prev => ({
       ...prev,
       emails: prev.emails.filter(e => e.id !== id)
@@ -196,11 +283,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Demo Notice */}
-      <div className="bg-amber-50 border-b border-amber-100 py-2 px-4 text-center">
-        <p className="text-xs font-medium text-amber-800 flex items-center justify-center gap-2">
+      {/* Live Notice */}
+      <div className="bg-emerald-50 border-b border-emerald-100 py-2 px-4 text-center">
+        <p className="text-xs font-medium text-emerald-800 flex items-center justify-center gap-2">
           <Shield className="w-3 h-3" />
-          <span>DEMO MODE: This is a frontend prototype. It does not receive real emails yet.</span>
+          <span>LIVE MODE: Connected to real SMTP infrastructure. Messages arrive in real-time.</span>
         </p>
       </div>
 
@@ -214,7 +301,7 @@ export default function App() {
               </div>
               <span className="text-xl font-bold tracking-tight text-slate-900">SwiftInbox</span>
             </div>
-            
+
             <div className="hidden md:flex items-center gap-8">
               <a href="#features" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">Features</a>
               <a href="#how-it-works" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">How it Works</a>
@@ -222,7 +309,7 @@ export default function App() {
               <button className="btn-primary py-2 px-4 text-sm">Get Pro</button>
             </div>
 
-            <button 
+            <button
               className="md:hidden p-2 text-slate-600"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
@@ -234,7 +321,7 @@ export default function App() {
         {/* Mobile Menu */}
         <AnimatePresence>
           {isMenuOpen && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -267,13 +354,13 @@ export default function App() {
                 <span className="text-accent">in 1 Click.</span>
               </h1>
               <p className="text-lg text-slate-600 mb-10 max-w-2xl mx-auto">
-                Protect your privacy and keep your real inbox clean. No registration, 
+                Protect your privacy and keep your real inbox clean. No registration,
                 no personal data, just instant disposable email addresses.
               </p>
             </motion.div>
 
             {/* Email Generator Box */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.2 }}
@@ -281,13 +368,13 @@ export default function App() {
             >
               <div className="flex flex-col md:flex-row gap-4 items-center">
                 <div className="flex-grow w-full relative">
-                  <input 
-                    type="text" 
-                    readOnly 
-                    value={inbox.address || 'Generating...'} 
+                  <input
+                    type="text"
+                    readOnly
+                    value={inbox.address || 'Generating...'}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 font-mono text-lg text-slate-700 focus:outline-none"
                   />
-                  <button 
+                  <button
                     onClick={copyToClipboard}
                     className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-primary transition-colors"
                     title="Copy to clipboard"
@@ -295,7 +382,7 @@ export default function App() {
                     {copied ? <CheckCircle2 className="text-accent" /> : <Copy />}
                   </button>
                 </div>
-                <button 
+                <button
                   onClick={generateNewEmail}
                   disabled={inbox.isLoading}
                   className="btn-primary w-full md:w-auto flex items-center justify-center gap-2 whitespace-nowrap"
@@ -304,7 +391,7 @@ export default function App() {
                   New Address
                 </button>
               </div>
-              
+
               <div className="mt-4 flex items-center justify-center gap-6 text-sm text-slate-500">
                 <div className="flex items-center gap-1">
                   <Shield className="w-4 h-4" />
@@ -314,7 +401,7 @@ export default function App() {
                   <Clock className="w-4 h-4" />
                   <span>Expires in {formatTime(timeLeft)}</span>
                 </div>
-                <button 
+                <button
                   onClick={addTime}
                   className="flex items-center gap-1 text-accent hover:text-emerald-600 transition-colors font-medium"
                   title="Add 10 minutes"
@@ -354,7 +441,7 @@ export default function App() {
                 <RefreshCw className={`w-4 h-4 ${inbox.isLoading ? 'animate-spin' : ''}`} />
                 <span>Last checked: {inbox.lastUpdated.toLocaleTimeString()}</span>
               </div>
-              <button 
+              <button
                 onClick={simulateIncomingEmail}
                 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-accent bg-accent/10 px-4 py-2 rounded-lg hover:bg-accent/20 transition-all"
               >
@@ -369,12 +456,12 @@ export default function App() {
                 {inbox.emails.length === 0 ? (
                   <div className="glass-card p-12 text-center flex flex-col items-center justify-center">
                     <motion.div
-                      animate={{ 
+                      animate={{
                         scale: [1, 1.1, 1],
                         rotate: [0, 5, -5, 0]
                       }}
-                      transition={{ 
-                        duration: 4, 
+                      transition={{
+                        duration: 4,
                         repeat: Infinity,
                         ease: "easeInOut"
                       }}
@@ -387,14 +474,14 @@ export default function App() {
                       Waiting for incoming emails. If you're expecting a message, check your external services or try refreshing.
                     </p>
                     <div className="flex flex-col gap-3 w-full">
-                      <button 
+                      <button
                         onClick={refreshInbox}
                         className="btn-primary py-2 text-sm flex items-center justify-center gap-2"
                       >
                         <RefreshCw className={`w-4 h-4 ${inbox.isLoading ? 'animate-spin' : ''}`} />
                         Refresh Inbox
                       </button>
-                      <button 
+                      <button
                         onClick={generateNewEmail}
                         className="btn-outline py-2 text-sm"
                       >
@@ -408,9 +495,8 @@ export default function App() {
                       key={email.id}
                       layoutId={email.id}
                       onClick={() => handleEmailClick(email)}
-                      className={`glass-card p-4 cursor-pointer transition-all hover:shadow-md border-l-4 ${
-                        selectedEmail?.id === email.id ? 'border-l-primary bg-slate-50' : 'border-l-transparent'
-                      }`}
+                      className={`glass-card p-4 cursor-pointer transition-all hover:shadow-md border-l-4 ${selectedEmail?.id === email.id ? 'border-l-primary bg-slate-50' : 'border-l-transparent'
+                        }`}
                     >
                       <div className="flex justify-between items-start mb-1">
                         <span className="text-sm font-semibold text-slate-900 truncate max-w-[150px]">{email.from}</span>
@@ -429,14 +515,14 @@ export default function App() {
                   {selectedEmail ? (
                     <div className="flex flex-col h-full">
                       <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                        <button 
+                        <button
                           onClick={() => setSelectedEmail(null)}
                           className="lg:hidden p-2 -ml-2 text-slate-400 hover:text-slate-600"
                         >
                           <X className="w-5 h-5" />
                         </button>
                         <div className="flex gap-2">
-                          <button 
+                          <button
                             onClick={() => deleteEmail(selectedEmail.id)}
                             className="p-2 text-slate-400 hover:text-red-500 transition-colors"
                             title="Delete email"
@@ -517,7 +603,7 @@ export default function App() {
                   desc: "Basic usage is and always will be free. No hidden costs or credit cards required."
                 }
               ].map((feature, i) => (
-                <motion.div 
+                <motion.div
                   key={i}
                   whileHover={{ y: -5 }}
                   className="glass-card p-8"
@@ -542,7 +628,7 @@ export default function App() {
                 <p className="text-slate-400 text-lg mb-10">
                   SwiftInbox is designed to be as simple as possible. No learning curve, just results.
                 </p>
-                
+
                 <div className="space-y-8">
                   {[
                     { step: "01", title: "Generate", desc: "Click the 'New Address' button to instantly get a random, unique email address." },
@@ -561,9 +647,9 @@ export default function App() {
               </div>
               <div className="relative">
                 <div className="absolute -inset-4 bg-accent/20 blur-3xl rounded-full"></div>
-                <img 
-                  src="https://picsum.photos/seed/swift/800/600" 
-                  alt="App Preview" 
+                <img
+                  src="https://picsum.photos/seed/swift/800/600"
+                  alt="App Preview"
                   className="relative rounded-2xl shadow-2xl border border-white/10"
                   referrerPolicy="no-referrer"
                 />
@@ -626,7 +712,7 @@ export default function App() {
                 <a href="#" className="text-slate-400 hover:text-primary transition-colors"><Github className="w-5 h-5" /></a>
               </div>
             </div>
-            
+
             <div>
               <h4 className="font-bold text-slate-900 mb-6">Service</h4>
               <ul className="space-y-4 text-sm text-slate-500">
@@ -657,7 +743,7 @@ export default function App() {
               </ul>
             </div>
           </div>
-          
+
           <div className="pt-8 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-xs text-slate-400">
               © {new Date().getFullYear()} SwiftInbox. All rights reserved.
