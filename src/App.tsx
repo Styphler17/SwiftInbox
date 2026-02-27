@@ -1,35 +1,56 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  Mail,
-  Copy,
-  RefreshCw,
-  Shield,
-  Zap,
-  Inbox,
-  CheckCircle2,
-  ChevronRight,
-  Trash2,
-  Clock,
-  Lock,
+import { 
+  Mail, 
+  Copy, 
+  RefreshCw, 
+  Shield, 
+  Zap, 
+  Inbox, 
+  CheckCircle2, 
+  ChevronRight, 
+  Trash2, 
+  Clock, 
+  Lock, 
   Code,
   ExternalLink,
   Menu,
   X,
   Github,
   Plus,
-  Bell
+  Bell,
+  Globe,
+  Settings,
+  Layers,
+  Star,
+  ArrowRight,
+  Database,
+  Webhook
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Email, InboxState } from './types';
 
+// --- Constants ---
+const DOMAINS = [
+  { name: 'swiftinbox.com', premium: false },
+  { name: 'mail-temp.org', premium: false },
+  { name: 'gmail.com', premium: true, provider: 'Google' },
+  { name: 'outlook.com', premium: true, provider: 'Microsoft' },
+  { name: 'hotmail.com', premium: true, provider: 'Microsoft' },
+  { name: 'yahoo.com', premium: true, provider: 'Yahoo' },
+  { name: 'icloud.com', premium: true, provider: 'Apple' },
+  { name: 'private-mail.io', premium: true },
+  { name: 'dev-test.net', premium: true },
+  { name: 'secure-inbox.pro', premium: true },
+];
+
 // --- Mock Data Generator ---
-const generateRandomAddress = () => {
+const generateRandomAddress = (domain: string) => {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
   for (let i = 0; i < 8; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
-  return `${result}@swiftinbox.com`;
+  return `${result}@${domain}`;
 };
 
 const MOCK_EMAILS: Email[] = [
@@ -53,153 +74,134 @@ const MOCK_EMAILS: Email[] = [
 
 // --- Main Component ---
 export default function App() {
-  const [inbox, setInbox] = useState<InboxState>({
-    address: '',
-    emails: [],
-    isLoading: false,
-    lastUpdated: new Date(),
-    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-  });
+  const [inboxes, setInboxes] = useState<InboxState[]>([]);
+  const [activeInboxId, setActiveInboxId] = useState<string>('');
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [copied, setCopied] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [timeLeft, setTimeLeft] = useState<number>(600); // 10 minutes in seconds
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
-  const [token, setToken] = useState<string | null>(localStorage.getItem('swift_token'));
-  const [accountId, setAccountId] = useState<string | null>(localStorage.getItem('swift_accountId'));
+  const [selectedDomain, setSelectedDomain] = useState(DOMAINS[0]);
+  const [isPro, setIsPro] = useState(false);
+  const [customDomain, setCustomDomain] = useState('');
+  const [showSupport, setShowSupport] = useState(false);
 
+  const activeInbox = inboxes.find(i => i.id === activeInboxId);
+  
   // Simulation of auto-refresh
   const refreshInterval = useRef<NodeJS.Timeout | null>(null);
   const countdownInterval = useRef<NodeJS.Timeout | null>(null);
 
-  const generateNewEmail = useCallback(async (isInitial = false) => {
-    if (!isInitial) setInbox(prev => ({ ...prev, isLoading: true }));
+  const createInbox = useCallback((domainName: string) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const now = new Date();
+    const expiry = new Date(now.getTime() + 10 * 60 * 1000);
+    const initialEmail = { ...MOCK_EMAILS[0], id: Math.random().toString(), timestamp: now.toISOString() };
+    
+    const newInbox: InboxState = {
+      id,
+      address: generateRandomAddress(domainName),
+      domain: domainName,
+      emails: [initialEmail],
+      isLoading: false,
+      lastUpdated: now,
+      expiresAt: expiry,
+      timeLeft: 600,
+    };
 
-    try {
-      // 1. Get Domains
-      const domainRes = await fetch('/api/domains');
-      const domains = await domainRes.json();
-      if (!domains['hydra:member'] || domains['hydra:member'].length === 0) throw new Error('No domains available');
-
-      const domain = domains['hydra:member'][0].domain;
-      const username = Math.random().toString(36).substring(2, 10);
-      const address = `${username}@${domain}`;
-      const password = Math.random().toString(36).substring(2, 12);
-
-      // 2. Create Account
-      const accountRes = await fetch('/api/accounts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, password }),
-      });
-      const account = await accountRes.json();
-
-      // 3. Get Token
-      const tokenRes = await fetch('/api/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, password }),
-      });
-      const tokenData = await tokenRes.json();
-
-      const now = new Date();
-      const expiry = new Date(now.getTime() + 10 * 60 * 1000);
-
-      setToken(tokenData.token);
-      setAccountId(account.id);
-      localStorage.setItem('swift_token', tokenData.token);
-      localStorage.setItem('swift_accountId', account.id);
-      localStorage.setItem('swift_address', address);
-
-      setInbox({
-        address: address,
-        emails: [],
-        isLoading: false,
-        lastUpdated: now,
-        expiresAt: expiry,
-      });
-      setTimeLeft(600);
-    } catch (error) {
-      console.error('Failed to generate email:', error);
-      showToast("Connection failed. Using demo mode.");
-    }
+    setInboxes(prev => [...prev, newInbox]);
+    setActiveInboxId(id);
+    return id;
   }, []);
 
+  const generateNewEmail = useCallback(() => {
+    if (activeInbox) {
+      setInboxes(prev => prev.map(i => i.id === activeInboxId ? { ...i, isLoading: true } : i));
+      setTimeout(() => {
+        const now = new Date();
+        const expiry = new Date(now.getTime() + 10 * 60 * 1000);
+        setInboxes(prev => prev.map(i => i.id === activeInboxId ? {
+          ...i,
+          address: generateRandomAddress(i.domain),
+          emails: [{ ...MOCK_EMAILS[0], id: Math.random().toString(), timestamp: now.toISOString() }],
+          isLoading: false,
+          lastUpdated: now,
+          expiresAt: expiry,
+          timeLeft: 600,
+        } : i));
+      }, 800);
+    } else {
+      createInbox(selectedDomain.name);
+    }
+  }, [activeInbox, activeInboxId, createInbox, selectedDomain.name]);
+
   const simulateIncomingEmail = () => {
-    showToast("Simulation disabled in real mode.");
+    if (!activeInboxId) return;
+    const newEmail: Email = {
+      id: Math.random().toString(36).substr(2, 9),
+      from: 'noreply@service.com',
+      subject: 'Your Verification Code',
+      body: `Your code is: ${Math.floor(100000 + Math.random() * 900000)}. Use this to complete your registration.`,
+      timestamp: new Date().toISOString(),
+      read: false,
+    };
+    
+    setInboxes(prev => prev.map(i => i.id === activeInboxId ? {
+      ...i,
+      emails: [newEmail, ...i.emails]
+    } : i));
+    showToast("New simulated email received!");
   };
 
-  const refreshInbox = useCallback(async (showLoading = false) => {
-    if (!token) return;
+  const refreshInbox = useCallback((showLoading = false) => {
+    if (!activeInboxId) return;
+    setInboxes(prev => prev.map(i => i.id === activeInboxId ? { ...i, isLoading: showLoading } : i));
 
-    setInbox(prev => {
-      if (!prev.address) return prev;
-      return { ...prev, isLoading: showLoading };
-    });
-
-    try {
-      const response = await fetch('/api/messages', {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const data = await response.json();
-      const messages = data['hydra:member'] || [];
-
-      const mappedEmails: Email[] = messages.map((msg: any) => ({
-        id: msg.id,
-        from: msg.from.address,
-        subject: msg.subject,
-        body: msg.intro || 'No preview available',
-        timestamp: msg.createdAt,
-        read: msg.seen,
-      }));
-
-      setInbox(prev => ({
-        ...prev,
-        emails: mappedEmails,
+    setTimeout(() => {
+      setInboxes(prev => prev.map(i => i.id === activeInboxId ? {
+        ...i,
         isLoading: false,
         lastUpdated: new Date(),
-      }));
-    } catch (error) {
-      console.error('Failed to refresh inbox:', error);
-    }
-  }, [token]);
+      } : i));
+    }, 500);
+  }, [activeInboxId]);
 
-  // Initial generation / Hydration
+  // Initial generation
   useEffect(() => {
-    const savedAddress = localStorage.getItem('swift_address');
-    if (token && savedAddress && accountId) {
-      setInbox(prev => ({
-        ...prev,
-        address: savedAddress,
-        isLoading: true
-      }));
-      refreshInbox(true);
-    } else {
-      generateNewEmail(true);
+    if (inboxes.length === 0) {
+      createInbox(DOMAINS[0].name);
     }
   }, []);
 
   // Countdown timer
   useEffect(() => {
     countdownInterval.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          generateNewEmail();
-          return 600;
+      setInboxes(prev => prev.map(inbox => {
+        if (inbox.timeLeft <= 1) {
+          // Auto-rotate
+          const now = new Date();
+          const expiry = new Date(now.getTime() + 10 * 60 * 1000);
+          return {
+            ...inbox,
+            address: generateRandomAddress(inbox.domain),
+            emails: [{ ...MOCK_EMAILS[0], id: Math.random().toString(), timestamp: now.toISOString() }],
+            lastUpdated: now,
+            expiresAt: expiry,
+            timeLeft: 600,
+          };
         }
-        return prev - 1;
-      });
+        return { ...inbox, timeLeft: inbox.timeLeft - 1 };
+      }));
     }, 1000);
 
     return () => {
       if (countdownInterval.current) clearInterval(countdownInterval.current);
     };
-  }, [generateNewEmail]);
+  }, []);
 
   // Background refresh
   useEffect(() => {
     refreshInterval.current = setInterval(() => {
-      refreshInbox(false); // Don't show loading spinner for background refresh
+      refreshInbox(false);
     }, 3000);
 
     return () => {
@@ -219,75 +221,61 @@ export default function App() {
   };
 
   const addTime = () => {
-    setTimeLeft(prev => prev + 600); // Add 10 minutes
-    showToast("Added 10 minutes to your inbox!");
+    if (!activeInboxId) return;
+    const amount = isPro ? 3600 * 24 : 600; // 1 hour for pro, 10 mins for free
+    setInboxes(prev => prev.map(i => i.id === activeInboxId ? { ...i, timeLeft: i.timeLeft + amount } : i));
+    showToast(isPro ? "Added 1 hour to your inbox!" : "Added 10 minutes to your inbox!");
+  };
+
+  const setExtendedExpiry = () => {
+    if (!isPro) {
+      showToast("Extended expiry requires Pro!");
+      return;
+    }
+    setInboxes(prev => prev.map(i => i.id === activeInboxId ? { ...i, timeLeft: 3600 * 24 * 30 } : i));
+    showToast("Inbox expiry extended to 30 days!");
   };
 
   const copyToClipboard = () => {
-    if (!inbox.address) return;
-    navigator.clipboard.writeText(inbox.address);
+    if (!activeInbox?.address) return;
+    navigator.clipboard.writeText(activeInbox.address);
     setCopied(true);
     showToast("Email address copied to clipboard!");
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleEmailClick = async (email: Email) => {
+  const handleEmailClick = (email: Email) => {
     setSelectedEmail(email);
-
-    // Fetch full message body if it's just a snippet
-    if (token) {
-      try {
-        const response = await fetch(`/api/messages/${email.id}`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        const fullMsg = await response.json();
-        const updatedEmail = {
-          ...email,
-          body: fullMsg.text || fullMsg.html || email.body,
-          read: true
-        };
-        setSelectedEmail(updatedEmail);
-
-        // Update it in the inbox list as well
-        setInbox(prev => ({
-          ...prev,
-          emails: prev.emails.map(e => e.id === email.id ? updatedEmail : e)
-        }));
-      } catch (error) {
-        console.error('Failed to fetch full email body:', error);
-      }
-    }
-
     navigator.clipboard.writeText(email.body);
     showToast("Email content copied to clipboard!");
   };
 
-  const deleteEmail = async (id: string) => {
-    if (token) {
-      try {
-        await fetch(`/api/messages/${id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-      } catch (error) {
-        console.error('Failed to delete email from server:', error);
-      }
-    }
-
-    setInbox(prev => ({
-      ...prev,
-      emails: prev.emails.filter(e => e.id !== id)
-    }));
+  const deleteEmail = (id: string) => {
+    setInboxes(prev => prev.map(i => i.id === activeInboxId ? {
+      ...i,
+      emails: i.emails.filter(e => e.id !== id)
+    } : i));
     if (selectedEmail?.id === id) setSelectedEmail(null);
+  };
+
+  const removeInbox = (id: string) => {
+    if (inboxes.length <= 1) {
+      showToast("You must have at least one inbox.");
+      return;
+    }
+    setInboxes(prev => prev.filter(i => i.id !== id));
+    if (activeInboxId === id) {
+      setActiveInboxId(inboxes.find(i => i.id !== id)?.id || '');
+    }
   };
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Live Notice */}
-      <div className="bg-emerald-50 border-b border-emerald-100 py-2 px-4 text-center">
-        <p className="text-xs font-medium text-emerald-800 flex items-center justify-center gap-2">
+      {/* Demo Notice */}
+      <div className="bg-amber-50 border-b border-amber-100 py-2 px-4 text-center">
+        <p className="text-xs font-medium text-amber-800 flex items-center justify-center gap-2">
           <Shield className="w-3 h-3" />
-          <span>LIVE MODE: Connected to real SMTP infrastructure. Messages arrive in real-time.</span>
+          <span>DEMO MODE: This is a frontend prototype. It does not receive real emails yet.</span>
         </p>
       </div>
 
@@ -301,15 +289,27 @@ export default function App() {
               </div>
               <span className="text-xl font-bold tracking-tight text-slate-900">SwiftInbox</span>
             </div>
-
+            
             <div className="hidden md:flex items-center gap-8">
               <a href="#features" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">Features</a>
               <a href="#how-it-works" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">How it Works</a>
               <a href="#faq" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">FAQ</a>
-              <button className="btn-primary py-2 px-4 text-sm">Get Pro</button>
+              {isPro ? (
+                <div className="flex items-center gap-2 px-3 py-1 bg-accent/10 rounded-full">
+                  <Star className="w-4 h-4 text-accent fill-accent" />
+                  <span className="text-xs font-bold text-accent uppercase tracking-wider">Pro Member</span>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}
+                  className="btn-primary py-2 px-4 text-sm"
+                >
+                  Get Pro
+                </button>
+              )}
             </div>
 
-            <button
+            <button 
               className="md:hidden p-2 text-slate-600"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
@@ -321,7 +321,7 @@ export default function App() {
         {/* Mobile Menu */}
         <AnimatePresence>
           {isMenuOpen && (
-            <motion.div
+            <motion.div 
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -354,61 +354,166 @@ export default function App() {
                 <span className="text-accent">in 1 Click.</span>
               </h1>
               <p className="text-lg text-slate-600 mb-10 max-w-2xl mx-auto">
-                Protect your privacy and keep your real inbox clean. No registration,
+                Protect your privacy and keep your real inbox clean. No registration, 
                 no personal data, just instant disposable email addresses.
               </p>
             </motion.div>
 
             {/* Email Generator Box */}
-            <motion.div
+            <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.2 }}
               className="glass-card p-6 md:p-8 max-w-2xl mx-auto relative overflow-hidden"
             >
-              <div className="flex flex-col md:flex-row gap-4 items-center">
-                <div className="flex-grow w-full relative">
-                  <input
-                    type="text"
-                    readOnly
-                    value={inbox.address || 'Generating...'}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 font-mono text-lg text-slate-700 focus:outline-none"
-                  />
-                  <button
-                    onClick={copyToClipboard}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-primary transition-colors"
-                    title="Copy to clipboard"
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col md:flex-row gap-4 items-center">
+                  <div className="flex-grow w-full relative">
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={activeInbox?.address || 'Generating...'} 
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 font-mono text-lg text-slate-700 focus:outline-none"
+                    />
+                    <button 
+                      onClick={copyToClipboard}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-primary transition-colors"
+                      title="Copy to clipboard"
+                    >
+                      {copied ? <CheckCircle2 className="text-accent" /> : <Copy />}
+                    </button>
+                  </div>
+                  <button 
+                    onClick={generateNewEmail}
+                    disabled={activeInbox?.isLoading}
+                    className="btn-primary w-full md:w-auto flex items-center justify-center gap-2 whitespace-nowrap"
                   >
-                    {copied ? <CheckCircle2 className="text-accent" /> : <Copy />}
+                    {activeInbox?.isLoading ? <RefreshCw className="animate-spin" /> : <Zap />}
+                    New Address
                   </button>
                 </div>
-                <button
-                  onClick={generateNewEmail}
-                  disabled={inbox.isLoading}
-                  className="btn-primary w-full md:w-auto flex items-center justify-center gap-2 whitespace-nowrap"
-                >
-                  {inbox.isLoading ? <RefreshCw className="animate-spin" /> : <Zap />}
-                  New Address
-                </button>
-              </div>
 
-              <div className="mt-4 flex items-center justify-center gap-6 text-sm text-slate-500">
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Standard Domains</span>
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      {DOMAINS.filter(d => !d.premium).map((domain) => (
+                        <button
+                          key={domain.name}
+                          onClick={() => {
+                            setSelectedDomain(domain);
+                            if (activeInbox) {
+                               setInboxes(prev => prev.map(i => i.id === activeInboxId ? {
+                                 ...i,
+                                 domain: domain.name,
+                                 address: generateRandomAddress(domain.name)
+                               } : i));
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            selectedDomain.name === domain.name 
+                              ? 'bg-primary text-white shadow-md' 
+                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          {domain.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Premium & Major Providers</span>
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      {DOMAINS.filter(d => d.premium).map((domain) => (
+                        <button
+                          key={domain.name}
+                          onClick={() => {
+                            if (!isPro) {
+                              showToast("Premium domains require a Pro subscription!");
+                              return;
+                            }
+                            setSelectedDomain(domain);
+                            if (activeInbox) {
+                               setInboxes(prev => prev.map(i => i.id === activeInboxId ? {
+                                 ...i,
+                                 domain: domain.name,
+                                 address: generateRandomAddress(domain.name)
+                               } : i));
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                            selectedDomain.name === domain.name 
+                              ? 'bg-primary text-white shadow-md' 
+                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          <Star className={`w-3 h-3 ${selectedDomain.name === domain.name ? 'text-white' : 'text-amber-400 fill-amber-400'}`} />
+                          {domain.name}
+                        </button>
+                      ))}
+                      {isPro && (
+                        <div className="flex items-center gap-2 ml-2">
+                          <input 
+                            type="text"
+                            placeholder="custom-domain.com"
+                            value={customDomain}
+                            onChange={(e) => setCustomDomain(e.target.value)}
+                            className="px-3 py-1.5 rounded-lg text-xs border border-slate-200 focus:outline-none focus:border-primary w-40"
+                          />
+                          <button 
+                            onClick={() => {
+                              if (!customDomain.includes('.')) {
+                                showToast("Please enter a valid domain.");
+                                return;
+                              }
+                              const newAddr = generateRandomAddress(customDomain);
+                              setInboxes(prev => prev.map(i => i.id === activeInboxId ? {
+                                ...i,
+                                domain: customDomain,
+                                address: newAddr
+                              } : i));
+                              showToast(`Switched to custom domain: ${customDomain}`);
+                            }}
+                            className="p-1.5 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-6 text-sm text-slate-500">
                 <div className="flex items-center gap-1">
                   <Shield className="w-4 h-4" />
                   <span>Privacy Protected</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Clock className="w-4 h-4" />
-                  <span>Expires in {formatTime(timeLeft)}</span>
+                  <span>Expires in {formatTime(activeInbox?.timeLeft || 0)}</span>
                 </div>
-                <button
-                  onClick={addTime}
-                  className="flex items-center gap-1 text-accent hover:text-emerald-600 transition-colors font-medium"
-                  title="Add 10 minutes"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Time</span>
-                </button>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={addTime}
+                    className="flex items-center gap-1 text-accent hover:text-emerald-600 transition-colors font-medium"
+                    title={isPro ? "Add 1 hour" : "Add 10 minutes"}
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>{isPro ? "Add 1 Hour" : "Add Time"}</span>
+                  </button>
+                  {isPro && (
+                    <button 
+                      onClick={setExtendedExpiry}
+                      className="flex items-center gap-1 text-primary hover:text-blue-700 transition-colors font-medium"
+                    >
+                      <Layers className="w-4 h-4" />
+                      <span>30 Days Expiry</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </motion.div>
           </div>
@@ -431,37 +536,98 @@ export default function App() {
 
         {/* Live Inbox Section */}
         <section className="bg-slate-100 py-20 px-4" id="inbox">
-          <div className="max-w-5xl mx-auto">
+          <div className="max-w-7xl mx-auto">
+            {!isPro && (
+              <div className="mb-8 p-4 bg-slate-200/50 border border-slate-300 rounded-xl text-center">
+                <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Advertisement</p>
+                <div className="h-20 flex items-center justify-center text-slate-400 italic">
+                  Upgrade to Pro to remove all advertisements.
+                </div>
+              </div>
+            )}
             <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
               <div>
-                <h2 className="text-3xl font-bold text-slate-900 mb-2">Your Live Inbox</h2>
-                <p className="text-slate-600">Messages appear here automatically. No need to refresh.</p>
+                <h2 className="text-3xl font-bold text-slate-900 mb-2">Manage Your Inboxes</h2>
+                <p className="text-slate-600">Switch between multiple temporary addresses easily.</p>
               </div>
-              <div className="flex items-center gap-3 text-sm font-medium text-slate-500 bg-white px-4 py-2 rounded-lg border border-slate-200">
-                <RefreshCw className={`w-4 h-4 ${inbox.isLoading ? 'animate-spin' : ''}`} />
-                <span>Last checked: {inbox.lastUpdated.toLocaleTimeString()}</span>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-3 text-sm font-medium text-slate-500 bg-white px-4 py-2 rounded-lg border border-slate-200">
+                  <RefreshCw className={`w-4 h-4 ${activeInbox?.isLoading ? 'animate-spin' : ''}`} />
+                  <span>Last checked: {activeInbox?.lastUpdated.toLocaleTimeString()}</span>
+                </div>
+                <button 
+                  onClick={simulateIncomingEmail}
+                  className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-accent bg-accent/10 px-4 py-2 rounded-lg hover:bg-accent/20 transition-all"
+                >
+                  <Zap className="w-3 h-3" />
+                  Simulate Email
+                </button>
+                <button 
+                  onClick={() => {
+                    if (inboxes.length >= 2 && !isPro) {
+                      showToast("Multiple inboxes require a Pro subscription!");
+                      return;
+                    }
+                    createInbox(selectedDomain.name);
+                    showToast("New inbox created!");
+                  }}
+                  className="btn-primary py-2 px-4 text-xs flex items-center gap-2"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add Inbox
+                </button>
               </div>
-              <button
-                onClick={simulateIncomingEmail}
-                className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-accent bg-accent/10 px-4 py-2 rounded-lg hover:bg-accent/20 transition-all"
-              >
-                <Zap className="w-3 h-3" />
-                Simulate Email
-              </button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Inbox Sidebar */}
+              <div className="lg:col-span-3 space-y-2">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 px-2">Your Inboxes</div>
+                {inboxes.map((ib) => (
+                  <div 
+                    key={ib.id}
+                    onClick={() => setActiveInboxId(ib.id)}
+                    className={`group relative p-3 rounded-xl cursor-pointer transition-all border ${
+                      activeInboxId === ib.id 
+                        ? 'bg-white border-primary shadow-sm' 
+                        : 'bg-slate-50 border-transparent hover:bg-white hover:border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                        activeInboxId === ib.id ? 'bg-primary text-white' : 'bg-slate-200 text-slate-500'
+                      }`}>
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <div className="flex-grow min-w-0">
+                        <p className="text-xs font-bold text-slate-900 truncate">{ib.address}</p>
+                        <p className="text-[10px] text-slate-500">{formatTime(ib.timeLeft)} left</p>
+                      </div>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeInbox(ib.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               {/* Email List */}
-              <div className={`lg:col-span-5 space-y-3 ${selectedEmail ? 'hidden lg:block' : 'block'}`}>
-                {inbox.emails.length === 0 ? (
+              <div className={`lg:col-span-4 space-y-3 ${selectedEmail ? 'hidden lg:block' : 'block'}`}>
+                {!activeInbox || activeInbox.emails.length === 0 ? (
                   <div className="glass-card p-12 text-center flex flex-col items-center justify-center">
                     <motion.div
-                      animate={{
+                      animate={{ 
                         scale: [1, 1.1, 1],
                         rotate: [0, 5, -5, 0]
                       }}
-                      transition={{
-                        duration: 4,
+                      transition={{ 
+                        duration: 4, 
                         repeat: Infinity,
                         ease: "easeInOut"
                       }}
@@ -469,34 +635,29 @@ export default function App() {
                     >
                       <Inbox className="w-10 h-10 text-slate-300" />
                     </motion.div>
-                    <h3 className="text-slate-900 font-bold text-lg mb-2">Your inbox is empty</h3>
+                    <h3 className="text-slate-900 font-bold text-lg mb-2">Empty inbox</h3>
                     <p className="text-slate-500 text-sm mb-8 max-w-[250px] mx-auto">
-                      Waiting for incoming emails. If you're expecting a message, check your external services or try refreshing.
+                      Waiting for incoming emails for {activeInbox?.address}.
                     </p>
                     <div className="flex flex-col gap-3 w-full">
-                      <button
-                        onClick={refreshInbox}
+                      <button 
+                        onClick={() => refreshInbox(true)}
                         className="btn-primary py-2 text-sm flex items-center justify-center gap-2"
                       >
-                        <RefreshCw className={`w-4 h-4 ${inbox.isLoading ? 'animate-spin' : ''}`} />
+                        <RefreshCw className={`w-4 h-4 ${activeInbox?.isLoading ? 'animate-spin' : ''}`} />
                         Refresh Inbox
-                      </button>
-                      <button
-                        onClick={generateNewEmail}
-                        className="btn-outline py-2 text-sm"
-                      >
-                        Generate New Address
                       </button>
                     </div>
                   </div>
                 ) : (
-                  inbox.emails.map((email) => (
+                  activeInbox.emails.map((email) => (
                     <motion.div
                       key={email.id}
                       layoutId={email.id}
                       onClick={() => handleEmailClick(email)}
-                      className={`glass-card p-4 cursor-pointer transition-all hover:shadow-md border-l-4 ${selectedEmail?.id === email.id ? 'border-l-primary bg-slate-50' : 'border-l-transparent'
-                        }`}
+                      className={`glass-card p-4 cursor-pointer transition-all hover:shadow-md border-l-4 ${
+                        selectedEmail?.id === email.id ? 'border-l-primary bg-slate-50' : 'border-l-transparent'
+                      }`}
                     >
                       <div className="flex justify-between items-start mb-1">
                         <span className="text-sm font-semibold text-slate-900 truncate max-w-[150px]">{email.from}</span>
@@ -510,19 +671,19 @@ export default function App() {
               </div>
 
               {/* Email Detail View */}
-              <div className={`lg:col-span-7 ${selectedEmail ? 'block' : 'hidden lg:block'}`}>
+              <div className={`lg:col-span-5 ${selectedEmail ? 'block' : 'hidden lg:block'}`}>
                 <div className="glass-card h-full min-h-[400px] flex flex-col">
                   {selectedEmail ? (
                     <div className="flex flex-col h-full">
                       <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                        <button
+                        <button 
                           onClick={() => setSelectedEmail(null)}
                           className="lg:hidden p-2 -ml-2 text-slate-400 hover:text-slate-600"
                         >
                           <X className="w-5 h-5" />
                         </button>
                         <div className="flex gap-2">
-                          <button
+                          <button 
                             onClick={() => deleteEmail(selectedEmail.id)}
                             className="p-2 text-slate-400 hover:text-red-500 transition-colors"
                             title="Delete email"
@@ -539,7 +700,7 @@ export default function App() {
                             </div>
                             <div>
                               <p className="text-sm font-semibold text-slate-900">{selectedEmail.from}</p>
-                              <p className="text-xs text-slate-500">To: {inbox.address}</p>
+                              <p className="text-xs text-slate-500">To: {activeInbox?.address}</p>
                             </div>
                           </div>
                           <h2 className="text-2xl font-bold text-slate-900 mb-2">{selectedEmail.subject}</h2>
@@ -562,11 +723,12 @@ export default function App() {
           </div>
         </section>
 
-        {/* Features Section */}
+        {/* Core Features Section */}
         <section className="py-24 px-4" id="features">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Why use SwiftInbox?</h2>
+              <span className="text-primary font-bold text-sm uppercase tracking-widest mb-4 block">Why SwiftInbox?</span>
+              <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Powerful Features for Privacy</h2>
               <p className="text-slate-600 max-w-2xl mx-auto">Built for privacy-conscious users and developers who need a reliable way to handle temporary communications.</p>
             </div>
 
@@ -603,7 +765,7 @@ export default function App() {
                   desc: "Basic usage is and always will be free. No hidden costs or credit cards required."
                 }
               ].map((feature, i) => (
-                <motion.div
+                <motion.div 
                   key={i}
                   whileHover={{ y: -5 }}
                   className="glass-card p-8"
@@ -619,6 +781,112 @@ export default function App() {
           </div>
         </section>
 
+        {/* Pro Pricing Section */}
+        <section className="py-24 px-4 bg-white" id="pricing">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-16">
+              <span className="text-accent font-bold text-sm uppercase tracking-widest mb-4 block">Upgrade Your Experience</span>
+              <h2 className="text-3xl md:text-5xl font-bold text-slate-900 mb-6">SwiftInbox Pro</h2>
+              <p className="text-slate-600 max-w-2xl mx-auto text-lg">
+                Unlock advanced features designed for developers, testers, and power users who need more than just a temporary address.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+              {/* Free Plan */}
+              <div className="glass-card p-10 border-2 border-transparent">
+                <h3 className="text-2xl font-bold text-slate-900 mb-2">Free</h3>
+                <p className="text-slate-500 mb-8">Perfect for a quick signup.</p>
+                <div className="text-4xl font-bold text-slate-900 mb-8">$0<span className="text-lg text-slate-400 font-normal">/mo</span></div>
+                
+                <ul className="space-y-4 mb-10">
+                  {[
+                    "1 Active Inbox",
+                    "Standard Domains",
+                    "10 Minute Auto-Rotation",
+                    "Basic Spam Protection",
+                    "No Registration Required"
+                  ].map((feature, i) => (
+                    <li key={i} className="flex items-center gap-3 text-slate-600">
+                      <CheckCircle2 className="w-5 h-5 text-accent" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                <button className="w-full btn-outline">Current Plan</button>
+              </div>
+
+              {/* Pro Plan */}
+              <div className="glass-card p-10 border-2 border-primary relative overflow-hidden">
+                <div className="absolute top-0 right-0 bg-primary text-white text-[10px] font-bold px-4 py-1 uppercase tracking-widest transform rotate-45 translate-x-8 translate-y-4">Popular</div>
+                <h3 className="text-2xl font-bold text-slate-900 mb-2">Pro</h3>
+                <p className="text-slate-500 mb-8">For power users and developers.</p>
+                <div className="text-4xl font-bold text-slate-900 mb-8">$9<span className="text-lg text-slate-400 font-normal">/mo</span></div>
+                
+                <ul className="space-y-4 mb-10">
+                  {[
+                    "Unlimited Active Inboxes",
+                    "Premium & Custom Domains",
+                    "Extended Expiry (Up to 30 days)",
+                    "REST API & Webhooks Access",
+                    "Ad-Free Experience",
+                    "Priority Support"
+                  ].map((feature, i) => (
+                    <li key={i} className="flex items-center gap-3 text-slate-900 font-medium">
+                      <CheckCircle2 className="w-5 h-5 text-accent" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                <button 
+                  onClick={() => {
+                    setIsPro(true);
+                    showToast("Welcome to SwiftInbox Pro! All features unlocked.");
+                  }}
+                  className="w-full btn-primary shadow-xl shadow-primary/20"
+                >
+                  Upgrade to Pro
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Pro Features Grid */}
+        <section className="py-24 px-4 bg-slate-50">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {[
+                {
+                  icon: <Globe className="text-blue-500" />,
+                  title: "Premium Domains",
+                  desc: "Access exclusive domains that are never blacklisted by major services."
+                },
+                {
+                  icon: <Database className="text-emerald-500" />,
+                  title: "API Access",
+                  desc: "Automate your testing flows with our robust REST API documentation."
+                },
+                {
+                  icon: <Webhook className="text-purple-500" />,
+                  title: "Webhooks",
+                  desc: "Get notified instantly in Slack, Discord, or your own server when mail arrives."
+                }
+              ].map((feature, i) => (
+                <div key={i} className="flex gap-6">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center">
+                    {feature.icon}
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-slate-900 mb-2">{feature.title}</h4>
+                    <p className="text-sm text-slate-600 leading-relaxed">{feature.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* How it Works */}
         <section className="bg-primary py-24 px-4 text-white" id="how-it-works">
           <div className="max-w-7xl mx-auto">
@@ -628,7 +896,7 @@ export default function App() {
                 <p className="text-slate-400 text-lg mb-10">
                   SwiftInbox is designed to be as simple as possible. No learning curve, just results.
                 </p>
-
+                
                 <div className="space-y-8">
                   {[
                     { step: "01", title: "Generate", desc: "Click the 'New Address' button to instantly get a random, unique email address." },
@@ -647,9 +915,9 @@ export default function App() {
               </div>
               <div className="relative">
                 <div className="absolute -inset-4 bg-accent/20 blur-3xl rounded-full"></div>
-                <img
-                  src="https://picsum.photos/seed/swift/800/600"
-                  alt="App Preview"
+                <img 
+                  src="https://picsum.photos/seed/swift/800/600" 
+                  alt="App Preview" 
                   className="relative rounded-2xl shadow-2xl border border-white/10"
                   referrerPolicy="no-referrer"
                 />
@@ -712,7 +980,7 @@ export default function App() {
                 <a href="#" className="text-slate-400 hover:text-primary transition-colors"><Github className="w-5 h-5" /></a>
               </div>
             </div>
-
+            
             <div>
               <h4 className="font-bold text-slate-900 mb-6">Service</h4>
               <ul className="space-y-4 text-sm text-slate-500">
@@ -743,7 +1011,7 @@ export default function App() {
               </ul>
             </div>
           </div>
-
+          
           <div className="pt-8 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-xs text-slate-400">
               © {new Date().getFullYear()} SwiftInbox. All rights reserved.
@@ -755,6 +1023,39 @@ export default function App() {
             </div>
           </div>
         </div>
+        {/* Support Bubble */}
+        {isPro && (
+          <div className="fixed bottom-8 right-8 z-[100]">
+            <AnimatePresence>
+              {showSupport && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                  className="absolute bottom-20 right-0 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
+                >
+                  <div className="bg-primary p-4 text-white">
+                    <h4 className="font-bold">Priority Support</h4>
+                    <p className="text-xs text-white/80">Pro members get 24/7 priority assistance.</p>
+                  </div>
+                  <div className="p-6 h-64 flex flex-col items-center justify-center text-center">
+                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                      <Zap className="text-primary" />
+                    </div>
+                    <p className="text-sm text-slate-600">How can we help you today?</p>
+                    <button className="btn-primary mt-4 w-full py-2 text-sm">Start Chat</button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <button 
+              onClick={() => setShowSupport(!showSupport)}
+              className="w-14 h-14 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition-transform"
+            >
+              {showSupport ? <X /> : <Bell />}
+            </button>
+          </div>
+        )}
       </footer>
     </div>
   );

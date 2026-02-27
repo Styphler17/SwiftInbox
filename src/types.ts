@@ -8,9 +8,12 @@ export interface Email {
 }
 
 export interface InboxState {
+  id: string;
   address: string;
+  domain: string;
   emails: Email[];
   isLoading: boolean;
   lastUpdated: Date;
   expiresAt: Date;
+  timeLeft: number;
 }
