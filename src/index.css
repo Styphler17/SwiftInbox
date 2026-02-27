@@ -7,6 +7,12 @@
   
   --color-primary: #0f172a;
   --color-accent: #10b981;
+
+  @keyframes spin-slow {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+  }
+  --animate-spin-slow: spin-slow 4s linear infinite;
 }
 
 @layer base {
@@ -26,5 +32,26 @@
 
   .btn-outline {
     @apply border border-slate-200 bg-white px-6 py-3 rounded-xl font-medium transition-all hover:bg-slate-50 active:scale-95;
+  }
+
+  .neon-border-wrapper {
+    @apply relative p-[2px] overflow-hidden rounded-2xl;
+  }
+
+  .neon-border-content {
+    @apply relative z-10 bg-white rounded-[calc(1rem-2px)];
+  }
+
+  .neon-border-line {
+    @apply absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200%] h-[200%] animate-spin-slow;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      transparent 150deg,
+      #10b981 180deg,
+      #3b82f6 210deg,
+      transparent 240deg,
+      transparent 360deg
+    );
   }
 }

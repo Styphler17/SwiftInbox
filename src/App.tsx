@@ -24,7 +24,8 @@ import {
   Star,
   ArrowRight,
   Database,
-  Webhook
+  Webhook,
+  ArrowUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Email, InboxState } from './types';
@@ -81,15 +82,31 @@ export default function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
   const [selectedDomain, setSelectedDomain] = useState(DOMAINS[0]);
-  const [isPro, setIsPro] = useState(false);
+  const [plan, setPlan] = useState<'free' | 'plus' | 'pro'>('free');
   const [customDomain, setCustomDomain] = useState('');
   const [showSupport, setShowSupport] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+
+  const isPro = plan === 'plus' || plan === 'pro';
+  const isUltimate = plan === 'pro';
 
   const activeInbox = inboxes.find(i => i.id === activeInboxId);
   
   // Simulation of auto-refresh
   const refreshInterval = useRef<NodeJS.Timeout | null>(null);
   const countdownInterval = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowBackToTop(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const createInbox = useCallback((domainName: string) => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -221,15 +238,27 @@ export default function App() {
   };
 
   const addTime = () => {
-    if (!activeInboxId) return;
-    const amount = isPro ? 3600 * 24 : 600; // 1 hour for pro, 10 mins for free
+    if (!activeInboxId || !activeInbox) return;
+    
+    if (plan === 'free') {
+      if (activeInbox.timeLeft >= 1200) {
+        showToast("Free tier is limited to 20 minutes. Upgrade for more!");
+        return;
+      }
+      const newTime = Math.min(activeInbox.timeLeft + 600, 1200);
+      setInboxes(prev => prev.map(i => i.id === activeInboxId ? { ...i, timeLeft: newTime } : i));
+      showToast(`Added time! Max 20m for Free tier.`);
+      return;
+    }
+
+    const amount = isUltimate ? 3600 * 24 : 3600; 
     setInboxes(prev => prev.map(i => i.id === activeInboxId ? { ...i, timeLeft: i.timeLeft + amount } : i));
-    showToast(isPro ? "Added 1 hour to your inbox!" : "Added 10 minutes to your inbox!");
+    showToast(isUltimate ? "Added 24 hours to your inbox!" : "Added 1 hour to your inbox!");
   };
 
   const setExtendedExpiry = () => {
-    if (!isPro) {
-      showToast("Extended expiry requires Pro!");
+    if (!isUltimate) {
+      showToast("Extended 30-day expiry requires the Pro plan!");
       return;
     }
     setInboxes(prev => prev.map(i => i.id === activeInboxId ? { ...i, timeLeft: 3600 * 24 * 30 } : i));
@@ -294,10 +323,10 @@ export default function App() {
               <a href="#features" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">Features</a>
               <a href="#how-it-works" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">How it Works</a>
               <a href="#faq" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">FAQ</a>
-              {isPro ? (
+              {plan !== 'free' ? (
                 <div className="flex items-center gap-2 px-3 py-1 bg-accent/10 rounded-full">
                   <Star className="w-4 h-4 text-accent fill-accent" />
-                  <span className="text-xs font-bold text-accent uppercase tracking-wider">Pro Member</span>
+                  <span className="text-xs font-bold text-accent uppercase tracking-wider">{plan} Member</span>
                 </div>
               ) : (
                 <button 
@@ -342,8 +371,9 @@ export default function App() {
 
       <main className="flex-grow">
         {/* Hero Section */}
-        <section className="pt-16 pb-24 px-4">
-          <div className="max-w-4xl mx-auto text-center">
+        <section className="pt-16 pb-24 px-4 relative overflow-hidden">
+          <div className="absolute inset-0 border-[16px] border-primary/5 pointer-events-none"></div>
+          <div className="max-w-4xl mx-auto text-center relative z-10">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -364,38 +394,41 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.2 }}
-              className="glass-card p-6 md:p-8 max-w-2xl mx-auto relative overflow-hidden"
+              className="max-w-2xl mx-auto neon-border-wrapper shadow-2xl"
             >
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col md:flex-row gap-4 items-center">
-                  <div className="flex-grow w-full relative">
+              <div className="neon-border-line"></div>
+              <div className="neon-border-content p-6 md:p-10 relative overflow-hidden">
+                <div className="flex flex-col gap-8">
+                <div className="space-y-4">
+                  <div className="relative">
                     <input 
                       type="text" 
                       readOnly 
                       value={activeInbox?.address || 'Generating...'} 
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 font-mono text-lg text-slate-700 focus:outline-none"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-6 py-5 font-mono text-xl text-slate-700 focus:outline-none pr-16"
                     />
                     <button 
                       onClick={copyToClipboard}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-primary transition-colors"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 p-3 text-slate-400 hover:text-primary transition-colors"
                       title="Copy to clipboard"
                     >
-                      {copied ? <CheckCircle2 className="text-accent" /> : <Copy />}
+                      {copied ? <CheckCircle2 className="w-6 h-6 text-accent" /> : <Copy className="w-6 h-6" />}
                     </button>
                   </div>
+                  
                   <button 
                     onClick={generateNewEmail}
                     disabled={activeInbox?.isLoading}
-                    className="btn-primary w-full md:w-auto flex items-center justify-center gap-2 whitespace-nowrap"
+                    className="w-full bg-slate-900 text-white rounded-xl py-5 font-bold text-lg flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-lg active:scale-[0.98]"
                   >
-                    {activeInbox?.isLoading ? <RefreshCw className="animate-spin" /> : <Zap />}
+                    {activeInbox?.isLoading ? <RefreshCw className="animate-spin" /> : <Zap className="w-5 h-5 fill-white" />}
                     New Address
                   </button>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="flex flex-col gap-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Standard Domains</span>
+                <div className="space-y-6">
+                  <div className="flex flex-col gap-3">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] text-center">Standard Domains</span>
                     <div className="flex flex-wrap items-center justify-center gap-2">
                       {DOMAINS.filter(d => !d.premium).map((domain) => (
                         <button
@@ -410,10 +443,10 @@ export default function App() {
                                } : i));
                             }
                           }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                             selectedDomain.name === domain.name 
                               ? 'bg-primary text-white shadow-md' 
-                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                              : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'
                           }`}
                         >
                           {domain.name}
@@ -422,8 +455,8 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Premium & Major Providers</span>
+                  <div className="flex flex-col gap-3">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] text-center">Premium & Major Providers</span>
                     <div className="flex flex-wrap items-center justify-center gap-2">
                       {DOMAINS.filter(d => d.premium).map((domain) => (
                         <button
@@ -442,24 +475,24 @@ export default function App() {
                                } : i));
                             }
                           }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                          className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
                             selectedDomain.name === domain.name 
                               ? 'bg-primary text-white shadow-md' 
-                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                              : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'
                           }`}
                         >
-                          <Star className={`w-3 h-3 ${selectedDomain.name === domain.name ? 'text-white' : 'text-amber-400 fill-amber-400'}`} />
+                          <Star className={`w-3 h-3 ${selectedDomain.name === domain.name ? 'text-white fill-white' : 'text-amber-400 fill-amber-400'}`} />
                           {domain.name}
                         </button>
                       ))}
-                      {isPro && (
+                      {isUltimate && (
                         <div className="flex items-center gap-2 ml-2">
                           <input 
                             type="text"
                             placeholder="custom-domain.com"
                             value={customDomain}
                             onChange={(e) => setCustomDomain(e.target.value)}
-                            className="px-3 py-1.5 rounded-lg text-xs border border-slate-200 focus:outline-none focus:border-primary w-40"
+                            className="px-4 py-2 rounded-lg text-xs border border-slate-200 focus:outline-none focus:border-primary w-44"
                           />
                           <button 
                             onClick={() => {
@@ -475,9 +508,9 @@ export default function App() {
                               } : i));
                               showToast(`Switched to custom domain: ${customDomain}`);
                             }}
-                            className="p-1.5 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                            className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
                           >
-                            <Plus className="w-3 h-3" />
+                            <Plus className="w-4 h-4" />
                           </button>
                         </div>
                       )}
@@ -486,28 +519,28 @@ export default function App() {
                 </div>
               </div>
               
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-6 text-sm text-slate-500">
-                <div className="flex items-center gap-1">
-                  <Shield className="w-4 h-4" />
+              <div className="mt-10 pt-6 border-t border-slate-100 flex flex-wrap items-center justify-center gap-8 text-sm text-slate-500">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-slate-400" />
                   <span>Privacy Protected</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-slate-400" />
                   <span>Expires in {formatTime(activeInbox?.timeLeft || 0)}</span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4">
                   <button 
                     onClick={addTime}
-                    className="flex items-center gap-1 text-accent hover:text-emerald-600 transition-colors font-medium"
+                    className="flex items-center gap-2 text-accent hover:text-emerald-600 transition-colors font-bold"
                     title={isPro ? "Add 1 hour" : "Add 10 minutes"}
                   >
                     <Plus className="w-4 h-4" />
                     <span>{isPro ? "Add 1 Hour" : "Add Time"}</span>
                   </button>
-                  {isPro && (
+                  {isUltimate && (
                     <button 
                       onClick={setExtendedExpiry}
-                      className="flex items-center gap-1 text-primary hover:text-blue-700 transition-colors font-medium"
+                      className="flex items-center gap-2 text-primary hover:text-blue-700 transition-colors font-bold"
                     >
                       <Layers className="w-4 h-4" />
                       <span>30 Days Expiry</span>
@@ -515,9 +548,26 @@ export default function App() {
                   )}
                 </div>
               </div>
-            </motion.div>
-          </div>
-        </section>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+        {/* Back to Top Button */}
+        <AnimatePresence>
+          {showBackToTop && (
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              onClick={scrollToTop}
+              className="fixed bottom-8 right-8 z-50 p-4 bg-primary text-white rounded-full shadow-2xl hover:bg-slate-800 transition-all active:scale-90"
+              aria-label="Back to top"
+            >
+              <ArrowUp className="w-6 h-6" />
+            </motion.button>
+          )}
+        </AnimatePresence>
 
         {/* Toast Notification */}
         <AnimatePresence>
@@ -564,8 +614,9 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => {
-                    if (inboxes.length >= 2 && !isPro) {
-                      showToast("Multiple inboxes require a Pro subscription!");
+                    const maxInboxes = plan === 'pro' ? Infinity : (plan === 'plus' ? 5 : 1);
+                    if (inboxes.length >= maxInboxes) {
+                      showToast(`${plan === 'free' ? 'Free' : 'Plus'} plan is limited to ${maxInboxes} inbox${maxInboxes > 1 ? 'es' : ''}. Upgrade for more!`);
                       return;
                     }
                     createInbox(selectedDomain.name);
@@ -768,13 +819,16 @@ export default function App() {
                 <motion.div 
                   key={i}
                   whileHover={{ y: -5 }}
-                  className="glass-card p-8"
+                  className="neon-border-wrapper"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center mb-6">
-                    {feature.icon}
+                  <div className="neon-border-line"></div>
+                  <div className="neon-border-content p-8 h-full">
+                    <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center mb-6">
+                      {feature.icon}
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-3">{feature.title}</h3>
+                    <p className="text-slate-600 leading-relaxed">{feature.desc}</p>
                   </div>
-                  <h3 className="text-xl font-bold text-slate-900 mb-3">{feature.title}</h3>
-                  <p className="text-slate-600 leading-relaxed">{feature.desc}</p>
                 </motion.div>
               ))}
             </div>
@@ -792,58 +846,87 @@ export default function App() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
               {/* Free Plan */}
-              <div className="glass-card p-10 border-2 border-transparent">
-                <h3 className="text-2xl font-bold text-slate-900 mb-2">Free</h3>
-                <p className="text-slate-500 mb-8">Perfect for a quick signup.</p>
-                <div className="text-4xl font-bold text-slate-900 mb-8">$0<span className="text-lg text-slate-400 font-normal">/mo</span></div>
+              <div className="glass-card p-8 border-2 border-transparent flex flex-col">
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Free</h3>
+                <p className="text-slate-500 mb-6 text-sm">Perfect for a quick signup.</p>
+                <div className="text-3xl font-bold text-slate-900 mb-6">$0<span className="text-base text-slate-400 font-normal">/mo</span></div>
                 
-                <ul className="space-y-4 mb-10">
+                <ul className="space-y-3 mb-8 flex-grow">
                   {[
                     "1 Active Inbox",
                     "Standard Domains",
                     "10 Minute Auto-Rotation",
                     "Basic Spam Protection",
-                    "No Registration Required"
                   ].map((feature, i) => (
-                    <li key={i} className="flex items-center gap-3 text-slate-600">
-                      <CheckCircle2 className="w-5 h-5 text-accent" />
+                    <li key={i} className="flex items-center gap-2 text-sm text-slate-600">
+                      <CheckCircle2 className="w-4 h-4 text-accent" />
                       {feature}
                     </li>
                   ))}
                 </ul>
-                <button className="w-full btn-outline">Current Plan</button>
+                <button className="w-full btn-outline py-2 text-sm">Current Plan</button>
               </div>
 
-              {/* Pro Plan */}
-              <div className="glass-card p-10 border-2 border-primary relative overflow-hidden">
-                <div className="absolute top-0 right-0 bg-primary text-white text-[10px] font-bold px-4 py-1 uppercase tracking-widest transform rotate-45 translate-x-8 translate-y-4">Popular</div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-2">Pro</h3>
-                <p className="text-slate-500 mb-8">For power users and developers.</p>
-                <div className="text-4xl font-bold text-slate-900 mb-8">$9<span className="text-lg text-slate-400 font-normal">/mo</span></div>
+              {/* Plus Plan */}
+              <div className="glass-card p-8 border-2 border-slate-200 flex flex-col relative">
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Plus</h3>
+                <p className="text-slate-500 mb-6 text-sm">Great for regular users.</p>
+                <div className="text-3xl font-bold text-slate-900 mb-6">$4.99<span className="text-base text-slate-400 font-normal">/mo</span></div>
                 
-                <ul className="space-y-4 mb-10">
+                <ul className="space-y-3 mb-8 flex-grow">
                   {[
-                    "Unlimited Active Inboxes",
-                    "Premium & Custom Domains",
-                    "Extended Expiry (Up to 30 days)",
-                    "REST API & Webhooks Access",
+                    "5 Active Inboxes",
+                    "Premium Domains",
+                    "1 Hour Auto-Rotation",
                     "Ad-Free Experience",
-                    "Priority Support"
+                    "Standard Support"
                   ].map((feature, i) => (
-                    <li key={i} className="flex items-center gap-3 text-slate-900 font-medium">
-                      <CheckCircle2 className="w-5 h-5 text-accent" />
+                    <li key={i} className="flex items-center gap-2 text-sm text-slate-900 font-medium">
+                      <CheckCircle2 className="w-4 h-4 text-accent" />
                       {feature}
                     </li>
                   ))}
                 </ul>
                 <button 
                   onClick={() => {
-                    setIsPro(true);
+                    setPlan('plus');
+                    showToast("Welcome to SwiftInbox Plus!");
+                  }}
+                  className="w-full btn-primary py-2 text-sm"
+                >
+                  Upgrade to Plus
+                </button>
+              </div>
+
+              {/* Pro Plan */}
+              <div className="glass-card p-8 border-2 border-primary relative overflow-hidden flex flex-col">
+                <div className="absolute top-0 right-0 bg-primary text-white text-[8px] font-bold px-4 py-1 uppercase tracking-widest transform rotate-45 translate-x-8 translate-y-4">Ultimate</div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Pro</h3>
+                <p className="text-slate-500 mb-6 text-sm">For power users & devs.</p>
+                <div className="text-3xl font-bold text-slate-900 mb-6">$9<span className="text-base text-slate-400 font-normal">/mo</span></div>
+                
+                <ul className="space-y-3 mb-8 flex-grow">
+                  {[
+                    "Unlimited Active Inboxes",
+                    "Custom Domains",
+                    "30 Day Extended Expiry",
+                    "REST API & Webhooks",
+                    "Priority Support"
+                  ].map((feature, i) => (
+                    <li key={i} className="flex items-center gap-2 text-sm text-slate-900 font-bold">
+                      <CheckCircle2 className="w-4 h-4 text-accent" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                <button 
+                  onClick={() => {
+                    setPlan('pro');
                     showToast("Welcome to SwiftInbox Pro! All features unlocked.");
                   }}
-                  className="w-full btn-primary shadow-xl shadow-primary/20"
+                  className="w-full btn-primary py-2 text-sm shadow-xl shadow-primary/20"
                 >
                   Upgrade to Pro
                 </button>
@@ -873,13 +956,16 @@ export default function App() {
                   desc: "Get notified instantly in Slack, Discord, or your own server when mail arrives."
                 }
               ].map((feature, i) => (
-                <div key={i} className="flex gap-6">
-                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center">
-                    {feature.icon}
-                  </div>
-                  <div>
-                    <h4 className="text-lg font-bold text-slate-900 mb-2">{feature.title}</h4>
-                    <p className="text-sm text-slate-600 leading-relaxed">{feature.desc}</p>
+                <div key={i} className="neon-border-wrapper">
+                  <div className="neon-border-line"></div>
+                  <div className="neon-border-content p-6 h-full flex gap-6">
+                    <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center">
+                      {feature.icon}
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-bold text-slate-900 mb-2">{feature.title}</h4>
+                      <p className="text-sm text-slate-600 leading-relaxed">{feature.desc}</p>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -887,40 +973,73 @@ export default function App() {
           </div>
         </section>
 
-        {/* How it Works */}
-        <section className="bg-primary py-24 px-4 text-white" id="how-it-works">
+        {/* Redesigned Simple Steps Section */}
+        <section className="py-32 px-4 bg-slate-900 text-white overflow-hidden" id="how-it-works">
           <div className="max-w-7xl mx-auto">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center">
               <div>
-                <h2 className="text-3xl md:text-4xl font-bold mb-6">Three Simple Steps</h2>
-                <p className="text-slate-400 text-lg mb-10">
-                  SwiftInbox is designed to be as simple as possible. No learning curve, just results.
-                </p>
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                >
+                  <span className="text-accent font-mono text-sm tracking-widest uppercase mb-4 block">The Workflow</span>
+                  <h2 className="text-5xl md:text-7xl font-bold mb-8 tracking-tighter leading-none">
+                    THREE <br />
+                    <span className="text-white/20 italic">SIMPLE</span> <br />
+                    STEPS.
+                  </h2>
+                  <p className="text-slate-400 text-xl mb-12 max-w-md leading-relaxed">
+                    SwiftInbox is engineered for speed. No learning curve, just instant results for your privacy.
+                  </p>
+                </motion.div>
                 
-                <div className="space-y-8">
+                <div className="space-y-12">
                   {[
-                    { step: "01", title: "Generate", desc: "Click the 'New Address' button to instantly get a random, unique email address." },
-                    { step: "02", title: "Use", desc: "Copy the address and use it to sign up for services, download files, or verify accounts." },
-                    { step: "03", title: "Read", desc: "Watch your messages arrive in real-time. Your address expires and changes every 10 minutes." }
+                    { step: "01", title: "GENERATE", desc: "Instantly create a unique, random email address with one tap." },
+                    { step: "02", title: "SIGN UP", desc: "Use your temporary address for any service or verification." },
+                    { step: "03", title: "RECEIVE", desc: "Watch codes and links arrive in real-time in your live inbox." }
                   ].map((item, i) => (
-                    <div key={i} className="flex gap-6">
-                      <span className="text-4xl font-bold text-white/10">{item.step}</span>
-                      <div>
-                        <h3 className="text-xl font-bold mb-2">{item.title}</h3>
-                        <p className="text-slate-400">{item.desc}</p>
+                    <motion.div 
+                      key={i} 
+                      initial={{ opacity: 0, y: 20 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: i * 0.1 }}
+                      className="flex gap-8 group"
+                    >
+                      <span className="text-5xl font-bold text-white/5 group-hover:text-accent/20 transition-colors duration-500">{item.step}</span>
+                      <div className="pt-2">
+                        <h3 className="text-2xl font-bold mb-3 tracking-tight group-hover:text-accent transition-colors">{item.title}</h3>
+                        <p className="text-slate-400 leading-relaxed">{item.desc}</p>
                       </div>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
               </div>
+              
               <div className="relative">
-                <div className="absolute -inset-4 bg-accent/20 blur-3xl rounded-full"></div>
-                <img 
-                  src="https://picsum.photos/seed/swift/800/600" 
-                  alt="App Preview" 
-                  className="relative rounded-2xl shadow-2xl border border-white/10"
-                  referrerPolicy="no-referrer"
-                />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8, rotate: 5 }}
+                  whileInView={{ opacity: 1, scale: 1, rotate: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.8, ease: "easeOut" }}
+                  className="relative z-10"
+                >
+                  <div className="absolute -inset-10 bg-accent/10 blur-[120px] rounded-full"></div>
+                  <div className="glass-card bg-white/5 border-white/10 p-4 rounded-3xl shadow-2xl backdrop-blur-3xl">
+                    <img 
+                      src="https://picsum.photos/seed/swift-ui/1000/800" 
+                      alt="App Interface Preview" 
+                      className="rounded-2xl shadow-inner brightness-90 grayscale-[0.2] hover:grayscale-0 transition-all duration-700"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                </motion.div>
+                
+                {/* Decorative Elements */}
+                <div className="absolute top-1/2 -right-20 w-64 h-64 bg-primary/20 blur-[100px] rounded-full"></div>
+                <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-accent/5 blur-[100px] rounded-full"></div>
               </div>
             </div>
           </div>
