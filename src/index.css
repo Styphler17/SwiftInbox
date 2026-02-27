@@ -1,12 +1,21 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Poppins", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
-  --color-primary: #0f172a;
-  --color-accent: #10b981;
+  --color-primary: #008081;
+  --color-primary-dark: #046371;
+  --color-main-text: #0B1220;
+  --color-muted-text: #6B7280;
+  --color-page-bg: #F3F4F6;
+  --color-card-bg: #FFFFFF;
+  --color-success: #16A34A;
+  --color-warning: #EA580C;
+  --color-separator: #E5E7EB;
+  --color-accent: #008081;
 
   @keyframes spin-slow {
     from { transform: translate(-50%, -50%) rotate(0deg); }
@@ -17,21 +26,25 @@
 
 @layer base {
   body {
-    @apply font-sans bg-slate-50 text-slate-900 antialiased;
+    @apply font-sans bg-page-bg text-main-text antialiased;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
   }
 }
 
 @layer components {
   .glass-card {
-    @apply bg-white/80 backdrop-blur-md border border-slate-200 shadow-sm rounded-2xl;
+    @apply bg-card-bg/80 backdrop-blur-md border border-separator shadow-sm rounded-2xl;
   }
   
   .btn-primary {
-    @apply bg-primary text-white px-6 py-3 rounded-xl font-medium transition-all hover:bg-slate-800 active:scale-95 disabled:opacity-50;
+    @apply bg-primary text-white px-6 py-3 rounded-xl font-medium transition-all hover:bg-primary-dark active:scale-95 disabled:opacity-50;
   }
 
   .btn-outline {
-    @apply border border-slate-200 bg-white px-6 py-3 rounded-xl font-medium transition-all hover:bg-slate-50 active:scale-95;
+    @apply border border-separator bg-card-bg px-6 py-3 rounded-xl font-medium transition-all hover:bg-page-bg active:scale-95 text-main-text;
   }
 
   .neon-border-wrapper {
@@ -39,7 +52,7 @@
   }
 
   .neon-border-content {
-    @apply relative z-10 bg-white rounded-[calc(1rem-2px)];
+    @apply relative z-10 bg-card-bg rounded-[calc(1rem-2px)];
   }
 
   .neon-border-line {
@@ -48,10 +61,14 @@
       from 0deg,
       transparent 0deg,
       transparent 150deg,
-      #10b981 180deg,
-      #3b82f6 210deg,
+      var(--color-primary) 180deg,
+      var(--color-primary-dark) 210deg,
       transparent 240deg,
       transparent 360deg
     );
+  }
+  
+  .hero-gradient {
+    background: linear-gradient(135deg, #008081 0%, #046371 100%);
   }
 }

@@ -16,4 +16,7 @@ export interface InboxState {
   lastUpdated: Date;
   expiresAt: Date;
   timeLeft: number;
+  token?: string;
+  accountId?: string;
 }
+
