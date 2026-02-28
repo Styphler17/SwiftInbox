@@ -92,6 +92,7 @@ export default function App() {
   const [showSupport, setShowSupport] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [activePage, setActivePage] = useState<string | null>(null);
 
   const isPro = plan === 'plus' || plan === 'pro';
   const isUltimate = plan === 'pro';
@@ -1377,30 +1378,30 @@ export default function App() {
             <div>
               <h4 className="font-bold text-main-text mb-6">Service</h4>
               <ul className="space-y-4 text-sm text-muted-text">
-                <li><a href="#" className="hover:text-primary transition-colors">Temp Mail</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">API Access</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Browser Extension</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Custom Domains</a></li>
+                <li><button onClick={() => setActivePage('temp-mail')} className="hover:text-primary transition-colors">Temp Mail</button></li>
+                <li><button onClick={() => setActivePage('api-access')} className="hover:text-primary transition-colors">API Access</button></li>
+                <li><button onClick={() => setActivePage('extension')} className="hover:text-primary transition-colors">Browser Extension</button></li>
+                <li><button onClick={() => setActivePage('domains')} className="hover:text-primary transition-colors">Custom Domains</button></li>
               </ul>
             </div>
 
             <div>
               <h4 className="font-bold text-main-text mb-6">Company</h4>
               <ul className="space-y-4 text-sm text-muted-text">
-                <li><a href="#" className="hover:text-primary transition-colors">About Us</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Terms of Service</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Contact</a></li>
+                <li><button onClick={() => setActivePage('about')} className="hover:text-primary transition-colors">About Us</button></li>
+                <li><button onClick={() => setActivePage('privacy')} className="hover:text-primary transition-colors">Privacy Policy</button></li>
+                <li><button onClick={() => setActivePage('terms')} className="hover:text-primary transition-colors">Terms of Service</button></li>
+                <li><button onClick={() => setActivePage('contact')} className="hover:text-primary transition-colors">Contact</button></li>
               </ul>
             </div>
 
             <div>
               <h4 className="font-bold text-main-text mb-6">Resources</h4>
               <ul className="space-y-4 text-sm text-muted-text">
-                <li><a href="#" className="hover:text-primary transition-colors">Blog</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Documentation</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">FAQ</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Status</a></li>
+                <li><button onClick={() => setActivePage('blog')} className="hover:text-primary transition-colors">Blog</button></li>
+                <li><button onClick={() => setActivePage('docs')} className="hover:text-primary transition-colors">Documentation</button></li>
+                <li><a href="#faq" className="hover:text-primary transition-colors">FAQ</a></li>
+                <li><button onClick={() => setActivePage('status')} className="hover:text-primary transition-colors">Status</button></li>
               </ul>
             </div>
           </div>
@@ -1410,9 +1411,7 @@ export default function App() {
               © {new Date().getFullYear()} Debesties Mail. All rights reserved.
             </p>
             <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span>Made with</span>
-              <Zap className="w-3 h-3 text-amber-500 fill-amber-500" />
-              <span>for a cleaner web</span>
+              {/* Removed branding footnote */}
             </div>
           </div>
         </div>
@@ -1515,6 +1514,248 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Static Page Overlay */}
+      <AnimatePresence>
+        {activePage && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed inset-0 z-[200] bg-white overflow-y-auto"
+          >
+            <div className="max-w-4xl mx-auto px-6 py-12 md:py-24 relative">
+              <button
+                onClick={() => setActivePage(null)}
+                className="fixed top-8 right-8 p-3 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-900 transition-all z-[210] shadow-sm"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="prose prose-slate max-w-none">
+                {activePage === 'about' && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <h1 className="text-4xl font-black text-slate-900 mb-8">About Debesties Mail</h1>
+                    <div className="space-y-6 text-lg text-slate-600 leading-relaxed">
+                      <p>Debesties Mail was born out of a simple need: an approachable, fast, and community-friendly way to protect your digital identity.</p>
+                      <p>We believe that privacy shouldn't be a luxury or a technical headache. Our mission is to provide powerful, disposable email tools that anyone can use in one click.</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-12">
+                        <div className="p-8 bg-slate-50 rounded-3xl border border-slate-100">
+                          <Shield className="w-10 h-10 text-primary mb-4" />
+                          <h3 className="text-xl font-bold text-slate-900 mb-2">Privacy First</h3>
+                          <p className="text-base">We never log your IP or personal data. Your business is your business.</p>
+                        </div>
+                        <div className="p-8 bg-primary/5 rounded-3xl border border-primary/10">
+                          <Zap className="w-10 h-10 text-primary mb-4" />
+                          <h3 className="text-xl font-bold text-slate-900 mb-2">Community Built</h3>
+                          <p className="text-base">Designed with love for developers, testers, and everyday users.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activePage === 'privacy' && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <h1 className="text-4xl font-black text-slate-900 mb-8">Privacy Policy</h1>
+                    <div className="space-y-8 text-slate-600">
+                      <section>
+                        <h2 className="text-2xl font-bold text-slate-900 mb-4">1. Data Collection</h2>
+                        <p>We do not collect personal identification information. We don't store your primary email, your IP address, or your browser history.</p>
+                      </section>
+                      <section>
+                        <h2 className="text-2xl font-bold text-slate-900 mb-4">2. Temporary Nature</h2>
+                        <p>All emails received are stored temporarily and are automatically deleted after 10 minutes (or based on your Pro plan settings). We do not keep backups of expired emails.</p>
+                      </section>
+                      <section>
+                        <h2 className="text-2xl font-bold text-slate-900 mb-4">3. Third Parties</h2>
+                        <p>We use Mail.tm for email processing and Stripe for payment handling. These services have their own privacy policies.</p>
+                      </section>
+                    </div>
+                  </div>
+                )}
+
+                {activePage === 'terms' && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <h1 className="text-4xl font-black text-slate-900 mb-8">Terms of Service</h1>
+                    <div className="space-y-8 text-slate-600">
+                      <section>
+                        <h2 className="text-2xl font-bold text-slate-900 mb-4">1. Acceptable Use</h2>
+                        <p>You agree to use Debesties Mail for legitimate testing and privacy purposes. You may not use our service for spamming, harassment, or illegal activities.</p>
+                      </section>
+                      <section>
+                        <h2 className="text-2xl font-bold text-slate-900 mb-4">2. Service Modifications</h2>
+                        <p>We reserve the right to modify or discontinue parts of the service at any time. We are not liable for any data loss occurring due to the temporary nature of our service.</p>
+                      </section>
+                    </div>
+                  </div>
+                )}
+
+                {activePage === 'contact' && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto text-center py-20">
+                    <h1 className="text-4xl font-black text-slate-900 mb-4">Get in Touch</h1>
+                    <p className="text-xl text-slate-600 mb-12">Have a question or feedback? We'd love to hear from you.</p>
+                    <div className="bg-slate-50 p-12 rounded-[32px] border border-slate-100">
+                      <Mail className="w-16 h-16 text-primary mx-auto mb-6" />
+                      <h3 className="text-2xl font-bold text-slate-900 mb-2">Email Us</h3>
+                      <p className="text-primary font-bold text-lg mb-8">support@creativeutil.com</p>
+                      <p className="text-slate-500 text-sm">We typically respond within 24 hours.</p>
+                    </div>
+                  </div>
+                )}
+
+                {activePage === 'blog' && (PostCard(activePage))}
+
+                {activePage === 'docs' && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <h1 className="text-4xl font-black text-slate-900 mb-8">Documentation</h1>
+                    <div className="space-y-12">
+                      <section>
+                        <h2 className="text-2xl font-bold text-slate-900 mb-4">Quick Start</h2>
+                        <div className="space-y-4 text-slate-600">
+                          <p>1. <strong>Generate:</strong> Click 'New Address' to instantly get a temporary email.</p>
+                          <p>2. <strong>Use:</strong> Copy the address and use it for any service that asks for email.</p>
+                          <p>3. <strong>Verify:</strong> Watch incoming emails appear in your live inbox below.</p>
+                        </div>
+                      </section>
+                      <section>
+                        <h2 className="text-2xl font-bold text-slate-900 mb-4">Pro Features</h2>
+                        <p className="text-slate-600">Upgrade to Pro to unlock custom domains, longer expiry times, and priority support.</p>
+                      </section>
+                    </div>
+                  </div>
+                )}
+
+                {activePage === 'status' && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-xl mx-auto text-center py-20">
+                    <h1 className="text-4xl font-black text-slate-900 mb-12">System Status</h1>
+                    <div className="p-12 bg-emerald-50 rounded-[32px] border border-emerald-100 mb-8">
+                      <CheckCircle2 className="w-20 h-20 text-emerald-500 mx-auto mb-6" />
+                      <h2 className="text-3xl font-bold text-emerald-900 mb-2">All Systems Nominal</h2>
+                      <p className="text-emerald-700 font-medium">Global infrastructure is healthy.</p>
+                    </div>
+                    <div className="space-y-4">
+                      {["Email Processing", "API Server", "Database Cluster", "Payment Gateway"].map((service, i) => (
+                        <div key={i} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                          <span className="font-bold text-slate-700">{service}</span>
+                          <span className="text-emerald-600 text-sm font-bold">Operational</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Catch-all for other links */}
+                {activePage === 'temp-mail' && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <h1 className="text-4xl font-black text-slate-900 mb-8">Professional Temp Mail</h1>
+                    <div className="space-y-6 text-lg text-slate-600 leading-relaxed text-slate-600">
+                      <p>Our core service provides community-friendly, instant, and disposable temporary email addresses. Protect your real inbox from spam, trackers, and data breaches.</p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-8">
+                        <div className="p-6 bg-slate-50 rounded-2xl">
+                          <Clock className="w-8 h-8 text-primary mb-3" />
+                          <h4 className="font-bold text-slate-900">10-Min Inboxes</h4>
+                          <p className="text-sm">Auto-refreshing addresses for quick signups.</p>
+                        </div>
+                        <div className="p-6 bg-slate-50 rounded-2xl">
+                          <Lock className="w-8 h-8 text-primary mb-3" />
+                          <h4 className="font-bold text-slate-900">Encrypted</h4>
+                          <p className="text-sm">All communications are secured via SSL/TLS.</p>
+                        </div>
+                        <div className="p-6 bg-slate-50 rounded-2xl">
+                          <Trash2 className="w-8 h-8 text-primary mb-3" />
+                          <h4 className="font-bold text-slate-900">Auto-Delete</h4>
+                          <p className="text-sm">Emails are wiped permanently after expiry.</p>
+                        </div>
+                      </div>
+                      <button onClick={() => { setActivePage(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="btn-primary px-8 py-3">Start Using Now</button>
+                    </div>
+                  </div>
+                )}
+
+                {activePage === 'api-access' && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <h1 className="text-4xl font-black text-slate-900 mb-8 uppercase italic tracking-tighter italic">Developer API</h1>
+                    <div className="space-y-6 text-lg text-slate-600 leading-relaxed text-slate-600">
+                      <p>Integrate our temporary mail engine directly into your testing workflows or applications with our robust REST API.</p>
+                      <div className="bg-slate-900 rounded-3xl p-8 mb-8 font-mono text-sm text-slate-300">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="w-3 h-3 rounded-full bg-red-500" />
+                          <div className="w-3 h-3 rounded-full bg-amber-500" />
+                          <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                        </div>
+                        <p className="text-primary">GET /api/v1/generate</p>
+                        <p className="text-slate-500 italic"># Request a new temporary inbox</p>
+                        <p className="mt-4 text-primary">GET /api/v1/messages/{'{inbox_id}'}</p>
+                        <p className="text-slate-500 italic"># Poll for new messages</p>
+                      </div>
+                      <div className="p-8 bg-amber-50 border border-amber-100 rounded-3xl">
+                        <p className="text-amber-800 font-bold mb-2">Notice:</p>
+                        <p className="text-amber-700">API access is currently in invitation-only beta for Pro members. Contact us for an API key.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activePage === 'extension' && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 text-center py-12">
+                    <Globe className="w-20 h-20 text-primary mx-auto mb-8" />
+                    <h1 className="text-4xl font-black text-slate-900 mb-4">Browser Extension</h1>
+                    <p className="text-xl text-slate-600 mb-12 max-w-2xl mx-auto text-slate-600">Generate "Debesties" addresses directly in any signup form with our Chrome and Firefox extension. No more switching tabs.</p>
+                    <div className="flex flex-wrap justify-center gap-4">
+                      <button className="px-8 py-4 bg-slate-100 text-slate-400 rounded-2xl font-bold cursor-not-allowed">Coming Soon to Chrome</button>
+                      <button className="px-8 py-4 bg-slate-100 text-slate-400 rounded-2xl font-bold cursor-not-allowed">Coming Soon to Firefox</button>
+                    </div>
+                  </div>
+                )}
+
+                {activePage === 'domains' && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <h1 className="text-4xl font-black text-slate-900 mb-8">Custom Domains</h1>
+                    <div className="space-y-6 text-lg text-slate-600 leading-relaxed text-slate-600 text-slate-600">
+                      <p>Bring your own brand to temporary mailing. Pro and Ultimate members can connect their own domains to receive temporary emails on their specific vanity addresses.</p>
+                      <div className="space-y-4 py-8">
+                        {["Connect unlimited domains", "White-label dashboard", "MX record management", "Custom inbox prefixes"].map((feat, i) => (
+                          <div key={i} className="flex items-center gap-3">
+                            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                            <span className="font-medium text-slate-700">{feat}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// --- Sub-components for Static Pages ---
+function PostCard(_page: string) {
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <h1 className="text-4xl font-black text-slate-900 mb-12 text-center">The Clean-Inbox Blog</h1>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {[
+          { title: "Why Temp Email is Essential in 2026", date: "Feb 27, 2026", cat: "Privacy" },
+          { title: "Defeating Spam with One Simple Trick", date: "Feb 25, 2026", cat: "Tips" },
+          { title: "Debesties Mail: The Road to v1.0", date: "Feb 20, 2026", cat: "Product" },
+          { title: "Security Best Practices for Developers", date: "Feb 15, 2026", cat: "Engineering" }
+        ].map((post, i) => (
+          <div key={i} className="group cursor-pointer">
+            <div className="aspect-video bg-slate-100 rounded-3xl mb-4 overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-accent/10 transition-transform duration-500 group-hover:scale-105" />
+            </div>
+            <span className="text-primary text-xs font-bold tracking-widest uppercase">{post.cat}</span>
+            <h3 className="text-xl font-bold text-slate-900 mt-2 group-hover:text-primary transition-colors">{post.title}</h3>
+            <p className="text-slate-400 text-sm mt-1">{post.date}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
